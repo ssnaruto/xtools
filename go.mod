@@ -1,4 +1,4 @@
-module xtools
+module github.com/ssnaruto/xtools
 
 go 1.18
 
