@@ -129,7 +129,7 @@ func startWorker(ctx context.Context) {
 	worker := agg_system.New(
 		agg_system.Config{
 			Name: "Test agg system",
-			Kafka: agg_system.Kafka{
+			Kafka: &agg_system.Kafka{
 				Topic:           "test-worker",
 				ConsumerGroupId: "test-worker",
 				Host:            []string{"127.0.0.1:9092"},

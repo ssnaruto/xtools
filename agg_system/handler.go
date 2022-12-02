@@ -1,7 +1,6 @@
 package agg_system
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -9,26 +8,6 @@ import (
 	gojson "github.com/goccy/go-json"
 	"github.com/ssnaruto/xtools/logx"
 )
-
-type KafkaJob struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	*AGGHandler
-}
-
-func (k *KafkaJob) Stop() {
-	k.cancel()
-	k.AGGHandler.Wait()
-}
-
-func NewKafkaJob(cfg Config) KafkaJob {
-	ctx, cancel := context.WithCancel(context.Background())
-	return KafkaJob{
-		ctx:        ctx,
-		cancel:     cancel,
-		AGGHandler: NewWorkerAGGHandler(cfg),
-	}
-}
 
 func NewWorkerAGGHandler(cfg Config) *AGGHandler {
 	handler := AGGHandler{
@@ -70,6 +49,12 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 		}
 
 		for _, job := range w.AGGJob {
+
+			if job.Validate != nil {
+				if job.Validate(input) != nil {
+					continue
+				}
+			}
 
 			dimesions := map[string]string{}
 			metrics := map[string]float64{}
@@ -154,6 +139,9 @@ type AGGJob struct {
 }
 
 func (a *AGGJob) Flush() {
+	if a.Callback == nil {
+		return
+	}
 
 	for _, partition := range a.Caching.Workers {
 		for _, item := range partition.Records {
