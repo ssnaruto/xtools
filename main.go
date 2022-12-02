@@ -20,7 +20,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	logx.InfoP("Service started...")
 
-	go startWorker(ctx)
+	// go startWorker(ctx)
+	go startWorkerChannel(ctx)
 
 	signChan := make(chan os.Signal, 1)
 	signal.Notify(signChan, os.Interrupt, syscall.SIGTERM)
@@ -187,4 +188,106 @@ func NewSaramaAsyncProducer(producerName string) sarama.AsyncProducer {
 	}(producerName)
 
 	return producer
+}
+
+func startWorkerChannel(ctx context.Context) {
+
+	shutdown.Add(1)
+	worker := agg_system.New(
+		agg_system.Config{
+			Name: "Test agg system",
+			AGG: []agg_system.AGGConfig{
+				agg_system.AGGConfig{
+					Dimensions:   []string{"time", "siteId", "tagId", "countryCode"},
+					Metrics:      []string{"bidRequest", "bidResponse", "impressions", "revenue"},
+					PartitionKey: "siteId",
+					MaxItems:     10000,
+					Callback: func(result agg_system.OutputData) {
+
+						fmt.Println(utils.ToString(result))
+
+					},
+				},
+			},
+
+			StartAggAfterSeconds: 20,
+			FlushAfterSeconds:    10,
+			NumberOfWorker:       3,
+		},
+	)
+
+	go worker.Start()
+
+	go func() {
+
+		for i := 0; i < 5; i++ {
+
+			for i := 0; i < 500000; i++ {
+
+				dt := InputDemo{
+					Time:        "2022-11-29",
+					SiteId:      "100",
+					TagId:       222,
+					CountryCode: "US",
+
+					BidRequest:  1,
+					BidResponse: 1,
+					Impressions: 1,
+					Revenue:     0.5,
+				}
+
+				if jsonByte, err := gojson.Marshal(dt); err == nil {
+					worker.Add(jsonByte)
+				}
+
+				dx := InputDemo{
+					Time:        "2022-11-28",
+					SiteId:      "100",
+					TagId:       222,
+					CountryCode: "US",
+
+					BidRequest:  1,
+					BidResponse: 1,
+					Impressions: 1,
+					Revenue:     0.5,
+				}
+
+				if jsonByte, err := gojson.Marshal(dx); err == nil {
+					worker.Add(jsonByte)
+				}
+
+				dc := InputDemo{
+					Time:        "2022-11-28",
+					SiteId:      "100",
+					TagId:       88,
+					CountryCode: "US",
+
+					BidRequest:  1,
+					BidResponse: 1,
+					Impressions: 1,
+					Revenue:     0.2,
+				}
+
+				if jsonByte, err := gojson.Marshal(dc); err == nil {
+					worker.Add(jsonByte)
+				}
+
+			}
+
+			time.Sleep(5 * time.Second)
+		}
+
+		time.Sleep(10 * time.Second)
+		fmt.Println("INSERT DONE..........")
+
+	}()
+
+	select {
+	case <-ctx.Done():
+		worker.Close()
+	}
+
+	fmt.Println("COMPLETED......")
+	shutdown.Done()
+
 }

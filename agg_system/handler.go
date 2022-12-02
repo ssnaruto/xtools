@@ -11,16 +11,11 @@ import (
 
 func NewWorkerAGGHandler(cfg Config) *AGGHandler {
 	handler := AGGHandler{
-		name: fmt.Sprintf("%s (Kafka: %s / %s)", cfg.Name, cfg.Kafka.Topic, cfg.Kafka.ConsumerGroupId),
-		wg:   &sync.WaitGroup{},
+		name:      cfg.Name,
+		wg:        &sync.WaitGroup{},
+		AGGConfig: cfg.AGG,
 	}
-	for _, agCf := range cfg.AGG {
-		handler.AGGJob = append(handler.AGGJob, AGGJob{
-			AGGConfig: agCf,
-			Caching:   NewMemCache(agCf.MaxItems),
-		})
-	}
-
+	handler.InitCache()
 	return &handler
 }
 
@@ -30,7 +25,8 @@ type AGGHandler struct {
 	sync.Mutex
 	wg *sync.WaitGroup
 
-	AGGJob []AGGJob
+	AGGConfig []AGGConfig
+	AGGJob    []AGGJob
 }
 
 func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
@@ -107,12 +103,30 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	return nil
 }
 
+func (w *AGGHandler) InitCache() {
+	w.AGGJob = []AGGJob{}
+	for _, agCf := range w.AGGConfig {
+		w.AGGJob = append(w.AGGJob, AGGJob{
+			AGGConfig: agCf,
+			Caching:   NewMemCache(agCf.MaxItems),
+		})
+	}
+}
+
 func (w *AGGHandler) Flush() {
+	w.Lock()
+	wg := &sync.WaitGroup{}
 	for _, data := range w.AGGJob {
+		wg.Add(1)
 		go func(result AGGJob) {
 			result.Flush()
+			wg.Done()
 		}(data)
 	}
+
+	w.InitCache()
+	w.Unlock()
+	wg.Wait()
 }
 
 func (w *AGGHandler) GetTotalItems() int {

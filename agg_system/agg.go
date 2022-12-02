@@ -8,10 +8,8 @@ func New(cfg Config) AGGEngine {
 	if cfg.Kafka != nil {
 		return NewWorkerKafka(cfg)
 	}
-	if cfg.InputChan != nil {
-		return NewWorkerChannel(cfg)
-	}
 
+	return NewWorkerChannel(cfg)
 	return nil
 }
 

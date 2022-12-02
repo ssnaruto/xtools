@@ -2,6 +2,7 @@ package agg_system
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Shopify/sarama"
@@ -97,6 +98,7 @@ func (k *KafkaJob) Stop() {
 
 func NewKafkaJob(cfg Config) KafkaJob {
 	ctx, cancel := context.WithCancel(context.Background())
+	cfg.Name = fmt.Sprintf("%s (Kafka: %s / %s)", cfg.Name, cfg.Kafka.Topic, cfg.Kafka.ConsumerGroupId)
 	return KafkaJob{
 		ctx:        ctx,
 		cancel:     cancel,
