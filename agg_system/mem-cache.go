@@ -16,11 +16,14 @@ type MemCache struct {
 
 func (m *MemCache) GetCachePartition(partitionId string) *MapCache {
 	id, _ := strconv.ParseFloat(partitionId, 64)
+	if id <= 0 {
+		return m.Workers[0]
+	}
+
 	partition := math.Floor(id / m.MaxItems * m.NumberOfPartition)
 	if partition > m.NumberOfPartition || partition < 0 {
 		partition = m.NumberOfPartition
 	}
-
 	return m.Workers[int(partition)]
 }
 

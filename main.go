@@ -117,7 +117,6 @@ func startWorker(ctx context.Context) {
 
 			}
 
-			time.Sleep(5 * time.Second)
 		}
 
 		mssQue.AsyncClose()
@@ -129,7 +128,7 @@ func startWorker(ctx context.Context) {
 	shutdown.Add(1)
 	worker := agg_system.New(
 		agg_system.Config{
-			Name: "Test agg system",
+			Name: "Worker Kafka",
 			Kafka: &agg_system.Kafka{
 				Topic:           "test-worker",
 				ConsumerGroupId: "test-worker",
@@ -149,11 +148,22 @@ func startWorker(ctx context.Context) {
 
 					},
 				},
+				agg_system.AGGConfig{
+					Dimensions:   []string{"siteId", "countryCode"},
+					Metrics:      []string{"bidRequest", "bidResponse"},
+					PartitionKey: "xxx",
+					MaxItems:     10000,
+					Callback: func(result agg_system.OutputData) {
+
+						fmt.Println(utils.ToString(result))
+
+					},
+				},
 			},
 
-			StartAggAfterSeconds: 20,
+			StartAggAfterSeconds: 10,
 			FlushAfterSeconds:    10,
-			NumberOfWorker:       3,
+			NumberOfWorker:       1,
 		},
 	)
 
@@ -195,7 +205,7 @@ func startWorkerChannel(ctx context.Context) {
 	shutdown.Add(1)
 	worker := agg_system.New(
 		agg_system.Config{
-			Name: "Test agg system",
+			Name: "Worker Channel",
 			AGG: []agg_system.AGGConfig{
 				agg_system.AGGConfig{
 					Dimensions:   []string{"time", "siteId", "tagId", "countryCode"},
@@ -204,7 +214,21 @@ func startWorkerChannel(ctx context.Context) {
 					MaxItems:     10000,
 					Callback: func(result agg_system.OutputData) {
 
+						time.Sleep(500 * time.Millisecond)
 						fmt.Println(utils.ToString(result))
+
+					},
+				},
+				agg_system.AGGConfig{
+					Dimensions:   []string{"siteId", "countryCode"},
+					Metrics:      []string{"bidRequest", "bidResponse"},
+					PartitionKey: "siteId",
+					MaxItems:     10000,
+					Callback: func(result agg_system.OutputData) {
+
+						fmt.Println("-----------------")
+						fmt.Println(utils.ToString(result))
+						fmt.Println("-----------------")
 
 					},
 				},
@@ -212,7 +236,7 @@ func startWorkerChannel(ctx context.Context) {
 
 			StartAggAfterSeconds: 20,
 			FlushAfterSeconds:    10,
-			NumberOfWorker:       3,
+			NumberOfWorker:       1,
 		},
 	)
 
@@ -222,7 +246,7 @@ func startWorkerChannel(ctx context.Context) {
 
 		for i := 0; i < 5; i++ {
 
-			for i := 0; i < 500000; i++ {
+			for i := 0; i < 1000000; i++ {
 
 				dt := InputDemo{
 					Time:        "2022-11-29",
@@ -274,7 +298,6 @@ func startWorkerChannel(ctx context.Context) {
 
 			}
 
-			time.Sleep(5 * time.Second)
 		}
 
 		time.Sleep(10 * time.Second)

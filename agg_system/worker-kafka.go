@@ -25,7 +25,7 @@ func NewWorkerKafka(cfg Config) *WorkerKafka {
 
 type WorkerKafka struct {
 	Config
-	c          CronJob
+	cr         CronJob
 	stopSignal chan bool
 	isRunning  bool
 	isStarted  bool
@@ -37,9 +37,9 @@ func (a *WorkerKafka) Start() {
 	}
 
 	a.isStarted = true
-	a.c = NewCronJob(a.StartAggAfterSeconds)
-	a.c.Add(a.StartAGG)
-	a.c.Start()
+	a.cr = NewCronJob(a.StartAggAfterSeconds)
+	a.cr.Add(a.StartAGG)
+	a.cr.Start()
 }
 
 func (a *WorkerKafka) StartAGG() {
@@ -81,7 +81,7 @@ func (a *WorkerKafka) Stop() {
 
 func (a *WorkerKafka) Close() {
 	a.Stop()
-	a.c.Stop()
+	a.cr.Stop()
 	logx.Infof("%s / Closed...", a.Name)
 }
 

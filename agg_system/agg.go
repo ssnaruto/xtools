@@ -10,7 +10,6 @@ func New(cfg Config) AGGEngine {
 	}
 
 	return NewWorkerChannel(cfg)
-	return nil
 }
 
 type AGGEngine interface {

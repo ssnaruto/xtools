@@ -7,6 +7,7 @@ import (
 	"github.com/Shopify/sarama"
 	gojson "github.com/goccy/go-json"
 	"github.com/ssnaruto/xtools/logx"
+	"github.com/ssnaruto/xtools/utils"
 )
 
 func NewWorkerAGGHandler(cfg Config) *AGGHandler {
@@ -106,6 +107,11 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 func (w *AGGHandler) InitCache() {
 	w.AGGJob = []AGGJob{}
 	for _, agCf := range w.AGGConfig {
+		if agCf.PartitionKey != "" && !utils.InArrayString(agCf.PartitionKey, agCf.Dimensions) {
+			agCf.PartitionKey = ""
+			logx.Warnf("PartitionKey needs to be in Dimensions")
+		}
+
 		w.AGGJob = append(w.AGGJob, AGGJob{
 			AGGConfig: agCf,
 			Caching:   NewMemCache(agCf.MaxItems),
