@@ -51,5 +51,7 @@ func (c *CronJob) Start() {
 
 func (c *CronJob) Stop() {
 	c.stopSignal = true
-	c.wg.Wait()
+	if c.wg != nil {
+		c.wg.Wait()
+	}
 }

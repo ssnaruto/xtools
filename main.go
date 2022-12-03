@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,8 +21,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	logx.InfoP("Service started...")
 
-	// go startWorker(ctx)
-	go startWorkerChannel(ctx)
+	go startWorker(ctx)
+	// go startWorkerChannel(ctx)
 
 	signChan := make(chan os.Signal, 1)
 	signal.Notify(signChan, os.Interrupt, syscall.SIGTERM)
@@ -35,6 +36,31 @@ func main() {
 	logx.Close()
 
 	os.Exit(0)
+}
+
+func createKafkaTopic(topicsList []string) {
+	config := sarama.NewConfig()
+	config.Version = sarama.V2_8_0_0
+	admin, err := sarama.NewClusterAdmin([]string{"127.0.0.1:9092"}, config)
+
+	if err != nil {
+		log.Fatal("Error while creating cluster admin: ", err.Error())
+	}
+	defer func() { _ = admin.Close() }()
+
+	for _, topic := range topicsList {
+		err = admin.CreateTopic(topic, &sarama.TopicDetail{
+			NumPartitions:     6,
+			ReplicationFactor: 1,
+		}, false)
+
+		if err != nil {
+			log.Println("Error while creating topic: ", err.Error())
+		} else {
+			log.Println("Create topic success: ", topic)
+		}
+	}
+
 }
 
 type InputDemo struct {
@@ -52,11 +78,10 @@ type InputDemo struct {
 func startWorker(ctx context.Context) {
 
 	go func() {
-
+		return
 		mssQue := NewSaramaAsyncProducer("test")
-		for i := 0; i < 5; i++ {
-
-			for i := 0; i < 500000; i++ {
+		for i := 0; i < 11; i++ {
+			for i := 0; i < 1000000; i++ {
 
 				dt := InputDemo{
 					Time:        "2022-11-29",
@@ -72,55 +97,55 @@ func startWorker(ctx context.Context) {
 
 				if jsonByte, err := gojson.Marshal(dt); err == nil {
 					mssQue.Input() <- &sarama.ProducerMessage{
-						Topic: "test-worker",
+						Topic: "test-kafka",
 						Value: sarama.ByteEncoder(jsonByte),
 					}
 				}
 
-				dx := InputDemo{
-					Time:        "2022-11-28",
-					SiteId:      "100",
-					TagId:       222,
-					CountryCode: "US",
+				// dx := InputDemo{
+				// 	Time:        "2022-11-28",
+				// 	SiteId:      "100",
+				// 	TagId:       222,
+				// 	CountryCode: "US",
 
-					BidRequest:  1,
-					BidResponse: 1,
-					Impressions: 1,
-					Revenue:     0.5,
-				}
+				// 	BidRequest:  1,
+				// 	BidResponse: 1,
+				// 	Impressions: 1,
+				// 	Revenue:     0.5,
+				// }
 
-				if jsonByte, err := gojson.Marshal(dx); err == nil {
-					mssQue.Input() <- &sarama.ProducerMessage{
-						Topic: "test-worker",
-						Value: sarama.ByteEncoder(jsonByte),
-					}
-				}
+				// if jsonByte, err := gojson.Marshal(dx); err == nil {
+				// 	mssQue.Input() <- &sarama.ProducerMessage{
+				// 		Topic: "test-worker",
+				// 		Value: sarama.ByteEncoder(jsonByte),
+				// 	}
+				// }
 
-				dc := InputDemo{
-					Time:        "2022-11-28",
-					SiteId:      "100",
-					TagId:       88,
-					CountryCode: "US",
+				// dc := InputDemo{
+				// 	Time:        "2022-11-28",
+				// 	SiteId:      "100",
+				// 	TagId:       88,
+				// 	CountryCode: "US",
 
-					BidRequest:  1,
-					BidResponse: 1,
-					Impressions: 1,
-					Revenue:     0.2,
-				}
+				// 	BidRequest:  1,
+				// 	BidResponse: 1,
+				// 	Impressions: 1,
+				// 	Revenue:     0.2,
+				// }
 
-				if jsonByte, err := gojson.Marshal(dc); err == nil {
-					mssQue.Input() <- &sarama.ProducerMessage{
-						Topic: "test-worker",
-						Value: sarama.ByteEncoder(jsonByte),
-					}
-				}
+				// if jsonByte, err := gojson.Marshal(dc); err == nil {
+				// 	mssQue.Input() <- &sarama.ProducerMessage{
+				// 		Topic: "test-worker",
+				// 		Value: sarama.ByteEncoder(jsonByte),
+				// 	}
+				// }
 
 			}
 
 		}
 
 		mssQue.AsyncClose()
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 		fmt.Println("INSERT DONE..........")
 
 	}()
@@ -130,8 +155,8 @@ func startWorker(ctx context.Context) {
 		agg_system.Config{
 			Name: "Worker Kafka",
 			Kafka: &agg_system.Kafka{
-				Topic:           "test-worker",
-				ConsumerGroupId: "test-worker",
+				Topic:           "test-kafka",
+				ConsumerGroupId: "test-kafka",
 				Host:            []string{"127.0.0.1:9092"},
 				KafkaVersion:    sarama.V2_8_0_0,
 			},
@@ -236,7 +261,7 @@ func startWorkerChannel(ctx context.Context) {
 
 			StartAggAfterSeconds: 20,
 			FlushAfterSeconds:    10,
-			NumberOfWorker:       1,
+			NumberOfWorker:       4,
 		},
 	)
 
@@ -244,10 +269,13 @@ func startWorkerChannel(ctx context.Context) {
 
 	go func() {
 
-		for i := 0; i < 5; i++ {
+		ccc := 0
+		for i := 0; i < 11; i++ {
 
+			fmt.Println("ADD Data")
 			for i := 0; i < 1000000; i++ {
 
+				ccc++
 				dt := InputDemo{
 					Time:        "2022-11-29",
 					SiteId:      "100",
@@ -262,46 +290,48 @@ func startWorkerChannel(ctx context.Context) {
 
 				if jsonByte, err := gojson.Marshal(dt); err == nil {
 					worker.Add(jsonByte)
+				} else {
+					fmt.Println("xxxxxxxxxxxxxxxxxxxxxx")
 				}
 
-				dx := InputDemo{
-					Time:        "2022-11-28",
-					SiteId:      "100",
-					TagId:       222,
-					CountryCode: "US",
+				// dx := InputDemo{
+				// 	Time:        "2022-11-28",
+				// 	SiteId:      "100",
+				// 	TagId:       222,
+				// 	CountryCode: "US",
 
-					BidRequest:  1,
-					BidResponse: 1,
-					Impressions: 1,
-					Revenue:     0.5,
-				}
+				// 	BidRequest:  1,
+				// 	BidResponse: 1,
+				// 	Impressions: 1,
+				// 	Revenue:     0.5,
+				// }
 
-				if jsonByte, err := gojson.Marshal(dx); err == nil {
-					worker.Add(jsonByte)
-				}
+				// if jsonByte, err := gojson.Marshal(dx); err == nil {
+				// 	worker.Add(jsonByte)
+				// }
 
-				dc := InputDemo{
-					Time:        "2022-11-28",
-					SiteId:      "100",
-					TagId:       88,
-					CountryCode: "US",
+				// dc := InputDemo{
+				// 	Time:        "2022-11-28",
+				// 	SiteId:      "100",
+				// 	TagId:       88,
+				// 	CountryCode: "US",
 
-					BidRequest:  1,
-					BidResponse: 1,
-					Impressions: 1,
-					Revenue:     0.2,
-				}
+				// 	BidRequest:  1,
+				// 	BidResponse: 1,
+				// 	Impressions: 1,
+				// 	Revenue:     0.2,
+				// }
 
-				if jsonByte, err := gojson.Marshal(dc); err == nil {
-					worker.Add(jsonByte)
-				}
+				// if jsonByte, err := gojson.Marshal(dc); err == nil {
+				// 	worker.Add(jsonByte)
+				// }
 
 			}
 
 		}
 
-		time.Sleep(10 * time.Second)
 		fmt.Println("INSERT DONE..........")
+		fmt.Println(ccc)
 
 	}()
 

@@ -8,6 +8,7 @@ import (
 	gojson "github.com/goccy/go-json"
 	"github.com/ssnaruto/xtools/logx"
 	"github.com/ssnaruto/xtools/utils"
+	// "github.com/puzpuzpuz/xsync"
 )
 
 func NewWorkerAGGHandler(cfg Config) *AGGHandler {
@@ -16,7 +17,21 @@ func NewWorkerAGGHandler(cfg Config) *AGGHandler {
 		wg:        &sync.WaitGroup{},
 		AGGConfig: cfg.AGG,
 	}
-	handler.InitCache()
+	handler.AGGJob = []*AGGJob{}
+	for _, agCf := range handler.AGGConfig {
+		if agCf.PartitionKey != "" && !utils.InArrayString(agCf.PartitionKey, agCf.Dimensions) {
+			agCf.PartitionKey = ""
+			logx.Warnf("PartitionKey needs to be in Dimensions")
+		}
+
+		handler.AGGJob = append(handler.AGGJob, &AGGJob{
+			AGGData: AGGData{
+				AGGConfig: agCf,
+				Caching:   NewMemCache(agCf.MaxItems),
+			},
+		})
+	}
+
 	return &handler
 }
 
@@ -27,17 +42,20 @@ type AGGHandler struct {
 	wg *sync.WaitGroup
 
 	AGGConfig []AGGConfig
-	AGGJob    []AGGJob
+	AGGJob    []*AGGJob
 }
 
 func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 
 	w.wg.Add(1)
 	var counter int
+	// mCache := map[string]MetricsData{}
+	// xx := xsync.NewMap()
+
+	// ccc := cmap.New[MetricsData]()
 
 	for msg := range claim.Messages() {
 		counter++
-
 		var input InputData
 		err := gojson.Unmarshal(msg.Value, &input)
 		if err != nil {
@@ -46,7 +64,6 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 		}
 
 		for _, job := range w.AGGJob {
-
 			if job.Validate != nil {
 				if job.Validate(input) != nil {
 					continue
@@ -91,6 +108,43 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 			}
 			cache.Unlock()
 
+			// if ttt, ok := mCache[uniqueKey]; ok {
+			// 	for k, v := range metrics {
+			// 		ttt.Metrics[k] = ttt.Metrics[k] + v
+			// 	}
+			// 	mCache[uniqueKey] = ttt
+			// } else {
+			// 	mCache[uniqueKey] = MetricsData{
+			// 		Dimesions: dimesions,
+			// 		Metrics:   metrics,
+			// 	}
+			// }
+
+			// if ttt, ok := xx.Load(uniqueKey); ok {
+			// 	vvv := ttt.(MetricsData)
+			// 	for k, v := range metrics {
+			// 		vvv.Metrics[k] = vvv.Metrics[k] + v
+			// 	}
+			// 	xx.Store(uniqueKey, vvv)
+			// } else {
+			// 	xx.Store(uniqueKey, MetricsData{
+			// 		Dimesions: dimesions,
+			// 		Metrics:   metrics,
+			// 	})
+			// }
+
+			// if ttt, ok := ccc.Get(uniqueKey); ok {
+			// 	for k, v := range metrics {
+			// 		ttt.Metrics[k] = ttt.Metrics[k] + v
+			// 	}
+			// 	ccc.Set(uniqueKey, ttt)
+			// } else {
+			// 	ccc.Set(uniqueKey, MetricsData{
+			// 		Dimesions: dimesions,
+			// 		Metrics:   metrics,
+			// 	})
+			// }
+
 		}
 
 		sess.MarkMessage(msg, "")
@@ -100,37 +154,42 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	w.counter += counter
 	w.Unlock()
 
+	// for _, vl := range ccc.Items() {
+	// 	fmt.Println(utils.ToString(vl))
+	// }
+
+	// xx.Range(func(k string, vl interface{}) bool {
+	// 	fmt.Println(utils.ToString(vl))
+	// 	return true
+	// })
+
+	// for _, vl := range mCache {
+	// 	fmt.Println(utils.ToString(vl))
+	// }
+
 	w.wg.Done()
 	return nil
-}
 
-func (w *AGGHandler) InitCache() {
-	w.AGGJob = []AGGJob{}
-	for _, agCf := range w.AGGConfig {
-		if agCf.PartitionKey != "" && !utils.InArrayString(agCf.PartitionKey, agCf.Dimensions) {
-			agCf.PartitionKey = ""
-			logx.Warnf("PartitionKey needs to be in Dimensions")
-		}
-
-		w.AGGJob = append(w.AGGJob, AGGJob{
-			AGGConfig: agCf,
-			Caching:   NewMemCache(agCf.MaxItems),
-		})
-	}
 }
 
 func (w *AGGHandler) Flush() {
 	w.Lock()
 	wg := &sync.WaitGroup{}
 	for _, data := range w.AGGJob {
+		data.Lock()
 		wg.Add(1)
-		go func(result AGGJob) {
+		go func(result AGGData) {
 			result.Flush()
 			wg.Done()
-		}(data)
+		}(AGGData{
+			AGGConfig: data.AGGConfig,
+			Caching:   data.Caching,
+		})
+
+		data.ResetCache()
+		data.Unlock()
 	}
 
-	w.InitCache()
 	w.Unlock()
 	wg.Wait()
 }
@@ -154,11 +213,20 @@ type InputData map[string]interface{}
 type OutputData map[string]interface{}
 
 type AGGJob struct {
+	AGGData
+	sync.Mutex
+}
+
+type AGGData struct {
 	AGGConfig
 	Caching MemCache
 }
 
-func (a *AGGJob) Flush() {
+func (a *AGGData) ResetCache() {
+	a.Caching = NewMemCache(a.MaxItems)
+}
+
+func (a *AGGData) Flush() {
 	if a.Callback == nil {
 		return
 	}

@@ -44,7 +44,7 @@ func (a *WorkerKafka) Start() {
 
 func (a *WorkerKafka) StartAGG() {
 
-	logx.Infof("%s / Start AGG data in %v seconds", a.Name, a.FlushAfterSeconds)
+	logx.Infof("%s / Start AGG data in %v seconds with %v workers", a.Name, a.FlushAfterSeconds, a.NumberOfWorker)
 
 	a.stopSignal = make(chan bool)
 	a.isRunning = true

@@ -36,13 +36,13 @@ func (a *WorkerChannel) Start() {
 		return
 	}
 
-	logx.Infof("%s / Start AGG data in %v seconds", a.Name, a.FlushAfterSeconds)
+	logx.Infof("%s / Start AGG data in %v seconds with %v workers", a.Name, a.FlushAfterSeconds, a.NumberOfWorker)
 	a.isStarted = true
 	a.buff = make(chan *sarama.ConsumerMessage, 30000)
 	a.wg = &sync.WaitGroup{}
 	a.wg.Add(1)
-	worker := NewWorkerAGGHandler(a.Config)
 
+	worker := NewWorkerAGGHandler(a.Config)
 	for i := 1; i <= a.NumberOfWorker; i++ {
 		logx.Infof("%s / worker up and running...", a.Name)
 		go worker.ConsumeClaim(
@@ -61,6 +61,7 @@ func (a *WorkerChannel) Start() {
 		}
 	}()
 
+	time.Sleep(3 * time.Second)
 	worker.Wait()
 	worker.Flush()
 	a.wg.Done()
