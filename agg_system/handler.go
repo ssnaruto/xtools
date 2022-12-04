@@ -52,8 +52,6 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	// mCache := map[string]MetricsData{}
 	// xx := xsync.NewMap()
 
-	// ccc := cmap.New[MetricsData]()
-
 	for msg := range claim.Messages() {
 		counter++
 		var input InputData
@@ -232,7 +230,7 @@ func (a *AGGData) Flush() {
 	}
 
 	for _, partition := range a.Caching.Workers {
-		for _, item := range partition.Records {
+		for _, item := range partition.Items() {
 			output := OutputData{}
 			for k, vl := range item.Dimesions {
 				output[k] = vl

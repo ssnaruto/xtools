@@ -4,17 +4,27 @@ import (
 	"math"
 	"strconv"
 	"sync"
+
+	cmap "github.com/orcaman/concurrent-map/v2"
 )
 
+type CachingStorage interface {
+	Set(key string, value MetricsData)
+	Get(key string) (MetricsData, bool)
+	Items() map[string]MetricsData
+	Lock()
+	Unlock()
+}
+
 type MemCache struct {
-	Workers []*MapCache
+	Workers []CachingStorage
 
 	PartitionItemLimit float64
 	MaxItems           float64
 	NumberOfPartition  float64
 }
 
-func (m *MemCache) GetCachePartition(partitionId string) *MapCache {
+func (m *MemCache) GetCachePartition(partitionId string) CachingStorage {
 	id, _ := strconv.ParseFloat(partitionId, 64)
 	if id <= 0 {
 		return m.Workers[0]
@@ -29,7 +39,7 @@ func (m *MemCache) GetCachePartition(partitionId string) *MapCache {
 
 func NewMemCache(maxItems float64) MemCache {
 	result := MemCache{
-		Workers:            []*MapCache{},
+		Workers:            []CachingStorage{},
 		PartitionItemLimit: 5000,
 		MaxItems:           maxItems,
 	}
@@ -43,9 +53,13 @@ func NewMemCache(maxItems float64) MemCache {
 	return result
 }
 
-func NewMapCache() *MapCache {
-	return &MapCache{
-		Records: make(map[string]MetricsData),
+func NewMapCache() CachingStorage {
+	// return &MapCache{
+	// 	Records: make(map[string]MetricsData),
+	// }
+	
+	return &CMapCache{
+		Records: cmap.New[MetricsData](),
 	}
 }
 
@@ -64,6 +78,24 @@ func (m *MapCache) Get(key string) (MetricsData, bool) {
 	}
 
 	return MetricsData{}, false
+}
+
+func (m *MapCache) Items() map[string]MetricsData {
+	return m.Records
+}
+
+type CMapCache struct {
+	Records cmap.ConcurrentMap[string, MetricsData]
+	sync.Mutex
+}
+func (m *CMapCache) Set(key string, value MetricsData) {
+	m.Records.Set(key, value)
+}
+func (m *CMapCache) Items() map[string]MetricsData {
+	return m.Records.Items()
+}
+func (m *CMapCache) Get(key string) (MetricsData, bool) {
+	return m.Records.Get(key)
 }
 
 type MetricsData struct {
