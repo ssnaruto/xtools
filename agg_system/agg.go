@@ -44,6 +44,6 @@ type AGGConfig struct {
 	PartitionKey string
 	MaxItems     float64
 
-	Validate func(InputData) error
+	Validate func(InputData) (InputData, error)
 	Callback func(OutputData)
 }

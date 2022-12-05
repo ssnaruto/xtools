@@ -51,16 +51,19 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	var counter int
 	for msg := range claim.Messages() {
 		counter++
-		var input InputData
-		err := gojson.Unmarshal(msg.Value, &input)
+		var rawInput InputData
+		err := gojson.Unmarshal(msg.Value, &rawInput)
 		if err != nil {
 			sess.MarkMessage(msg, "")
 			continue
 		}
 
 		for _, job := range w.AGGJob {
+
+			input := rawInput
 			if job.Validate != nil {
-				if job.Validate(input) != nil {
+				input, err = job.Validate(rawInput)
+				if err != nil {
 					continue
 				}
 			}
