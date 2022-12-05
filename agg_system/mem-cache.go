@@ -54,12 +54,8 @@ func NewMemCache(maxItems float64) MemCache {
 }
 
 func NewMapCache() CachingStorage {
-	// return &MapCache{
-	// 	Records: make(map[string]MetricsData),
-	// }
-	
-	return &CMapCache{
-		Records: cmap.New[MetricsData](),
+	return &MapCache{
+		Records: make(map[string]MetricsData),
 	}
 }
 
@@ -88,6 +84,7 @@ type CMapCache struct {
 	Records cmap.ConcurrentMap[string, MetricsData]
 	sync.Mutex
 }
+
 func (m *CMapCache) Set(key string, value MetricsData) {
 	m.Records.Set(key, value)
 }

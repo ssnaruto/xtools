@@ -49,9 +49,6 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 
 	w.wg.Add(1)
 	var counter int
-	// mCache := map[string]MetricsData{}
-	// xx := xsync.NewMap()
-
 	for msg := range claim.Messages() {
 		counter++
 		var input InputData
@@ -105,44 +102,6 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 				})
 			}
 			cache.Unlock()
-
-			// if ttt, ok := mCache[uniqueKey]; ok {
-			// 	for k, v := range metrics {
-			// 		ttt.Metrics[k] = ttt.Metrics[k] + v
-			// 	}
-			// 	mCache[uniqueKey] = ttt
-			// } else {
-			// 	mCache[uniqueKey] = MetricsData{
-			// 		Dimesions: dimesions,
-			// 		Metrics:   metrics,
-			// 	}
-			// }
-
-			// if ttt, ok := xx.Load(uniqueKey); ok {
-			// 	vvv := ttt.(MetricsData)
-			// 	for k, v := range metrics {
-			// 		vvv.Metrics[k] = vvv.Metrics[k] + v
-			// 	}
-			// 	xx.Store(uniqueKey, vvv)
-			// } else {
-			// 	xx.Store(uniqueKey, MetricsData{
-			// 		Dimesions: dimesions,
-			// 		Metrics:   metrics,
-			// 	})
-			// }
-
-			// if ttt, ok := ccc.Get(uniqueKey); ok {
-			// 	for k, v := range metrics {
-			// 		ttt.Metrics[k] = ttt.Metrics[k] + v
-			// 	}
-			// 	ccc.Set(uniqueKey, ttt)
-			// } else {
-			// 	ccc.Set(uniqueKey, MetricsData{
-			// 		Dimesions: dimesions,
-			// 		Metrics:   metrics,
-			// 	})
-			// }
-
 		}
 
 		sess.MarkMessage(msg, "")
@@ -151,19 +110,6 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	w.Lock()
 	w.counter += counter
 	w.Unlock()
-
-	// for _, vl := range ccc.Items() {
-	// 	fmt.Println(utils.ToString(vl))
-	// }
-
-	// xx.Range(func(k string, vl interface{}) bool {
-	// 	fmt.Println(utils.ToString(vl))
-	// 	return true
-	// })
-
-	// for _, vl := range mCache {
-	// 	fmt.Println(utils.ToString(vl))
-	// }
 
 	w.wg.Done()
 	return nil
