@@ -75,13 +75,33 @@ type InputDemo struct {
 	Revenue     float64 `json:"revenue"`
 }
 
+type JobHandler struct{}
+
+func (j *JobHandler) Flush(result agg_system.OutputData) {
+	fmt.Println(utils.ToString(result))
+}
+
+func (j *JobHandler) Validate(input agg_system.InputData) (agg_system.InputData, error) {
+	input["click"] = "true"
+	input["click1"] = "0.5"
+	input["click2"] = "1"
+	input["click3"] = int32(1)
+	input["click4"] = true
+	input["click5"] = nil
+	return input, nil
+}
+
+func (j *JobHandler) Error(err error, input []byte) {
+	fmt.Println(err)
+	fmt.Println(string(input))
+}
+
 func startWorker(ctx context.Context) {
 
 	go func() {
-		return
 		mssQue := NewSaramaAsyncProducer("test")
-		for i := 0; i < 11; i++ {
-			for i := 0; i < 1000000; i++ {
+		for i := 0; i < 1; i++ {
+			for i := 0; i < 10; i++ {
 
 				dt := InputDemo{
 					Time:        "2022-11-29",
@@ -95,10 +115,10 @@ func startWorker(ctx context.Context) {
 					Revenue:     0.5,
 				}
 
-				if jsonByte, err := gojson.Marshal(dt); err == nil {
+				if _, err := gojson.Marshal(dt); err == nil {
 					mssQue.Input() <- &sarama.ProducerMessage{
 						Topic: "test-kafka",
-						Value: sarama.ByteEncoder(jsonByte),
+						Value: sarama.ByteEncoder([]byte("xxxxxxx")),
 					}
 				}
 
@@ -164,30 +184,15 @@ func startWorker(ctx context.Context) {
 			AGG: []agg_system.AGGConfig{
 				agg_system.AGGConfig{
 					Dimensions:   []string{"time", "siteId", "tagId", "countryCode"},
-					Metrics:      []string{"bidRequest", "bidResponse", "impressions", "revenue"},
+					Metrics:      []string{"click", "click1", "click2", "click3", "click4", "click5"},
 					PartitionKey: "siteId",
 					MaxItems:     10000,
-					Callback: func(result agg_system.OutputData) {
-
-						fmt.Println(utils.ToString(result))
-
-					},
-				},
-				agg_system.AGGConfig{
-					Dimensions:   []string{"siteId", "countryCode"},
-					Metrics:      []string{"bidRequest", "bidResponse"},
-					PartitionKey: "xxx",
-					MaxItems:     10000,
-					Callback: func(result agg_system.OutputData) {
-
-						fmt.Println(utils.ToString(result))
-
-					},
+					JobHandler:   &JobHandler{},
 				},
 			},
 
-			StartAggAfterSeconds: 10,
-			FlushAfterSeconds:    10,
+			StartAggAfterSeconds: 5,
+			FlushAfterSeconds:    1,
 			NumberOfWorker:       1,
 		},
 	)
@@ -237,25 +242,12 @@ func startWorkerChannel(ctx context.Context) {
 					Metrics:      []string{"bidRequest", "bidResponse", "impressions", "revenue"},
 					PartitionKey: "siteId",
 					MaxItems:     10000,
-					Callback: func(result agg_system.OutputData) {
-
-						time.Sleep(500 * time.Millisecond)
-						fmt.Println(utils.ToString(result))
-
-					},
 				},
 				agg_system.AGGConfig{
 					Dimensions:   []string{"siteId", "countryCode"},
 					Metrics:      []string{"bidRequest", "bidResponse"},
 					PartitionKey: "siteId",
 					MaxItems:     10000,
-					Callback: func(result agg_system.OutputData) {
-
-						fmt.Println("-----------------")
-						fmt.Println(utils.ToString(result))
-						fmt.Println("-----------------")
-
-					},
 				},
 			},
 

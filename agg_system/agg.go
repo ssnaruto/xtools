@@ -44,6 +44,11 @@ type AGGConfig struct {
 	PartitionKey string
 	MaxItems     float64
 
-	Validate func(InputData) (InputData, error)
-	Callback func(OutputData)
+	JobHandler
+}
+
+type JobHandler interface {
+	Validate(InputData) (InputData, error)
+	Flush(OutputData)
+	Error(error, []byte)
 }

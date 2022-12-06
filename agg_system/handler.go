@@ -2,6 +2,7 @@ package agg_system
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/Shopify/sarama"
@@ -52,17 +53,24 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	for msg := range claim.Messages() {
 		counter++
 		var rawInput InputData
-		err := gojson.Unmarshal(msg.Value, &rawInput)
-		if err != nil {
-			sess.MarkMessage(msg, "")
-			continue
-		}
+		var err error
+		errParse := gojson.Unmarshal(msg.Value, &rawInput)
 
 		for _, job := range w.AGGJob {
 
+			if errParse != nil {
+				if job.JobHandler != nil {
+					job.JobHandler.Error(
+						fmt.Errorf("Input invalid format: %s", errParse),
+						msg.Value,
+					)
+				}
+				continue
+			}
+
 			input := rawInput
-			if job.Validate != nil {
-				input, err = job.Validate(rawInput)
+			if job.JobHandler != nil {
+				input, err = job.JobHandler.Validate(rawInput)
 				if err != nil {
 					continue
 				}
@@ -86,8 +94,25 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 
 			for _, metricsKey := range job.Metrics {
 				if vl, ok := input[metricsKey]; ok {
-					metricData, _ := vl.(float64)
-					metrics[metricsKey] = metricData
+
+					switch metricValue := vl.(type) {
+					case float64:
+						metrics[metricsKey] = metricValue
+					case float32:
+						metrics[metricsKey] = float64(metricValue)
+					case int64:
+						metrics[metricsKey] = float64(metricValue)
+					case int32:
+						metrics[metricsKey] = float64(metricValue)
+					case int:
+						metrics[metricsKey] = float64(metricValue)
+					case string:
+						vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
+						metrics[metricsKey] = vlFloat64
+					default:
+						metrics[metricsKey] = 0
+					}
+
 				}
 			}
 
@@ -139,6 +164,7 @@ func (w *AGGHandler) Flush() {
 
 	w.Unlock()
 	wg.Wait()
+	logx.Infof("%s / Flush data completed...", w.name)
 }
 
 func (w *AGGHandler) GetTotalItems() int {
@@ -174,7 +200,7 @@ func (a *AGGData) ResetCache() {
 }
 
 func (a *AGGData) Flush() {
-	if a.Callback == nil {
+	if a.JobHandler == nil {
 		return
 	}
 
@@ -188,7 +214,7 @@ func (a *AGGData) Flush() {
 				output[k] = vl
 			}
 
-			a.Callback(output)
+			a.JobHandler.Flush(output)
 		}
 	}
 }
