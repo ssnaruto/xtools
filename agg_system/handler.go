@@ -82,37 +82,36 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 			var uniqueKey string
 			var partitionId string
 			for _, dimensionKey := range job.Dimensions {
+				var vlStr string
 				if vl, ok := input[dimensionKey]; ok {
-					vlStr := fmt.Sprintf("%v", vl)
-					dimesions[dimensionKey] = vlStr
+					vlStr = fmt.Sprintf("%v", vl)
 					uniqueKey = uniqueKey + vlStr
 					if dimensionKey == job.PartitionKey {
 						partitionId = vlStr
 					}
 				}
+
+				dimesions[dimensionKey] = vlStr
 			}
 
 			for _, metricsKey := range job.Metrics {
-				if vl, ok := input[metricsKey]; ok {
-
-					switch metricValue := vl.(type) {
-					case float64:
-						metrics[metricsKey] = metricValue
-					case float32:
-						metrics[metricsKey] = float64(metricValue)
-					case int64:
-						metrics[metricsKey] = float64(metricValue)
-					case int32:
-						metrics[metricsKey] = float64(metricValue)
-					case int:
-						metrics[metricsKey] = float64(metricValue)
-					case string:
-						vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
-						metrics[metricsKey] = vlFloat64
-					default:
-						metrics[metricsKey] = 0
-					}
-
+				vl, _ := input[metricsKey]
+				switch metricValue := vl.(type) {
+				case float64:
+					metrics[metricsKey] = metricValue
+				case float32:
+					metrics[metricsKey] = float64(metricValue)
+				case int64:
+					metrics[metricsKey] = float64(metricValue)
+				case int32:
+					metrics[metricsKey] = float64(metricValue)
+				case int:
+					metrics[metricsKey] = float64(metricValue)
+				case string:
+					vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
+					metrics[metricsKey] = vlFloat64
+				default:
+					metrics[metricsKey] = 0
 				}
 			}
 
