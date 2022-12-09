@@ -2,7 +2,9 @@ package utils
 
 import (
 	"bytes"
+	"crypto/aes"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
@@ -418,4 +420,43 @@ func GetOriginUrl(pageUrl string) string {
 
 func GetFirstNumberInString(str string) string {
 	return string(regexp.MustCompile(`\d+`).Find([]byte(str)))
+}
+
+func Hex2bin(data string) (string, error) {
+	i, err := strconv.ParseInt(data, 16, 0)
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(i, 2), nil
+}
+
+func DecryptAes128Ecb(data, key []byte) []byte {
+	cipher, _ := aes.NewCipher([]byte(key))
+	decrypted := make([]byte, len(data))
+	size := 16
+
+	for bs, be := 0, size; bs < len(data); bs, be = bs+size, be+size {
+		cipher.Decrypt(decrypted[bs:be], data[bs:be])
+	}
+
+	return decrypted
+}
+
+func Base64Decode(str string) (string, error) {
+	switch len(str) % 4 {
+	case 2:
+		str += "=="
+	case 3:
+		str += "="
+	}
+
+	data, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func URLDecode(str string) (string, error) {
+	return url.QueryUnescape(str)
 }
