@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/Shopify/sarama"
-	gojson "github.com/goccy/go-json"
 	"github.com/ssnaruto/xtools/logx"
 	"github.com/ssnaruto/xtools/utils"
 	// "github.com/puzpuzpuz/xsync"
@@ -14,9 +13,10 @@ import (
 
 func NewWorkerAGGHandler(cfg Config) *AGGHandler {
 	handler := AGGHandler{
-		name:      cfg.Name,
-		wg:        &sync.WaitGroup{},
-		AGGConfig: cfg.AGG,
+		name:         cfg.Name,
+		wg:           &sync.WaitGroup{},
+		InputHandler: cfg.InputHandler,
+		AGGConfig:    cfg.AGG,
 	}
 	handler.AGGJob = []*AGGJob{}
 	for _, agCf := range handler.AGGConfig {
@@ -42,6 +42,7 @@ type AGGHandler struct {
 	sync.Mutex
 	wg *sync.WaitGroup
 
+	InputHandler
 	AGGConfig []AGGConfig
 	AGGJob    []*AGGJob
 }
@@ -52,25 +53,17 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 	var counter int
 	for msg := range claim.Messages() {
 		counter++
-		var rawInput InputData
-		var err error
-		errParse := gojson.Unmarshal(msg.Value, &rawInput)
+		rawInput, err := w.Parse(msg.Value)
+		if err != nil {
+			sess.MarkMessage(msg, "")
+			continue
+		}
 
 		for _, job := range w.AGGJob {
 
-			if errParse != nil {
-				if job.JobHandler != nil {
-					job.JobHandler.Error(
-						fmt.Errorf("Input invalid format: %s", errParse),
-						msg.Value,
-					)
-				}
-				continue
-			}
-
 			input := rawInput
 			if job.JobHandler != nil {
-				input, err = job.JobHandler.Validate(rawInput)
+				input, err = job.JobHandler.DataHandle(rawInput)
 				if err != nil {
 					continue
 				}
@@ -180,9 +173,6 @@ func (w *AGGHandler) Cleanup(_ sarama.ConsumerGroupSession) error {
 func (w *AGGHandler) Wait() {
 	w.wg.Wait()
 }
-
-type InputData map[string]interface{}
-type OutputData map[string]interface{}
 
 type AGGJob struct {
 	AGGData

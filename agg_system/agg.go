@@ -21,6 +21,7 @@ type AGGEngine interface {
 type Config struct {
 	Name string
 	AGG  []AGGConfig
+	InputHandler
 
 	Kafka     *Kafka
 	InputChan chan []byte
@@ -48,7 +49,14 @@ type AGGConfig struct {
 }
 
 type JobHandler interface {
-	Validate(InputData) (InputData, error)
+	DataHandle(InputData) (InputData, error)
 	Flush(OutputData)
 	Error(error, []byte)
 }
+
+type InputHandler interface {
+	Parse([]byte) (InputData, error)
+}
+
+type InputData map[string]interface{}
+type OutputData map[string]interface{}
