@@ -49,7 +49,7 @@ type AGGConfig struct {
 }
 
 type JobHandler interface {
-	DataHandle(InputData) (InputData, error)
+	DataHandle(InputData) []InputData
 	Flush(OutputData)
 	Error(error, []byte)
 }

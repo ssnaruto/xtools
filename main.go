@@ -81,19 +81,27 @@ func (j *JobHandler) Flush(result agg_system.OutputData) {
 	fmt.Println(utils.ToString(result))
 }
 
-func (j *JobHandler) Validate(input agg_system.InputData) (agg_system.InputData, error) {
+func (j *JobHandler) DataHandle(input agg_system.InputData) []agg_system.InputData {
 	input["click"] = "true"
 	input["click1"] = "0.5"
 	input["click2"] = "1"
 	input["click3"] = int32(1)
 	input["click4"] = true
 	input["click5"] = nil
-	return input, nil
+	return []agg_system.InputData{input}
 }
 
 func (j *JobHandler) Error(err error, input []byte) {
 	fmt.Println(err)
 	fmt.Println(string(input))
+}
+
+type InputHandler struct{}
+
+func (j *InputHandler) Parse(msg []byte) (agg_system.InputData, error) {
+	var data agg_system.InputData
+	err := gojson.Unmarshal(msg, &data)
+	return data, err
 }
 
 func startWorker(ctx context.Context) {
@@ -181,6 +189,7 @@ func startWorker(ctx context.Context) {
 				KafkaVersion:    sarama.V2_8_0_0,
 			},
 
+			InputHandler: &InputHandler{},
 			AGG: []agg_system.AGGConfig{
 				agg_system.AGGConfig{
 					Dimensions:   []string{"time", "siteId", "tagId", "countryCode"},

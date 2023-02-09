@@ -20,6 +20,11 @@ func NewWorkerAGGHandler(cfg Config) *AGGHandler {
 	}
 	handler.AGGJob = []*AGGJob{}
 	for _, agCf := range handler.AGGConfig {
+		if agCf.JobHandler == nil {
+			logx.Warn("AGGConfig.JobHandler is required to get started")
+			continue
+		}
+
 		if agCf.PartitionKey != "" && !utils.InArrayString(agCf.PartitionKey, agCf.Dimensions) {
 			agCf.PartitionKey = ""
 			logx.Warnf("PartitionKey needs to be in Dimensions")
@@ -61,67 +66,65 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 
 		for _, job := range w.AGGJob {
 
-			input := rawInput
-			if job.JobHandler != nil {
-				input, err = job.JobHandler.DataHandle(rawInput)
-				if err != nil {
-					continue
+			for _, inputData := range job.JobHandler.DataHandle(rawInput) {
+
+				dimesions := map[string]string{}
+				metrics := map[string]float64{}
+
+				var uniqueKey string
+				var partitionId string
+
+				for _, dimensionKey := range job.Dimensions {
+					var vlStr string
+					if vl, ok := inputData[dimensionKey]; ok {
+						vlStr = fmt.Sprintf("%v", vl)
+						uniqueKey = uniqueKey + vlStr
+						if dimensionKey == job.PartitionKey {
+							partitionId = vlStr
+						}
+					}
+
+					dimesions[dimensionKey] = vlStr
 				}
-			}
 
-			dimesions := map[string]string{}
-			metrics := map[string]float64{}
-
-			var uniqueKey string
-			var partitionId string
-			for _, dimensionKey := range job.Dimensions {
-				var vlStr string
-				if vl, ok := input[dimensionKey]; ok {
-					vlStr = fmt.Sprintf("%v", vl)
-					uniqueKey = uniqueKey + vlStr
-					if dimensionKey == job.PartitionKey {
-						partitionId = vlStr
+				for _, metricsKey := range job.Metrics {
+					vl, _ := inputData[metricsKey]
+					switch metricValue := vl.(type) {
+					case float64:
+						metrics[metricsKey] = metricValue
+					case float32:
+						metrics[metricsKey] = float64(metricValue)
+					case int64:
+						metrics[metricsKey] = float64(metricValue)
+					case int32:
+						metrics[metricsKey] = float64(metricValue)
+					case int:
+						metrics[metricsKey] = float64(metricValue)
+					case string:
+						vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
+						metrics[metricsKey] = vlFloat64
+					default:
+						metrics[metricsKey] = 0
 					}
 				}
 
-				dimesions[dimensionKey] = vlStr
+				cache := job.Caching.GetCachePartition(partitionId)
+				cache.Lock()
+				if cacheData, ok := cache.Get(uniqueKey); ok {
+					for k, v := range metrics {
+						cacheData.Metrics[k] = cacheData.Metrics[k] + v
+					}
+					cache.Set(uniqueKey, cacheData)
+				} else {
+					cache.Set(uniqueKey, MetricsData{
+						Dimesions: dimesions,
+						Metrics:   metrics,
+					})
+				}
+				cache.Unlock()
+
 			}
 
-			for _, metricsKey := range job.Metrics {
-				vl, _ := input[metricsKey]
-				switch metricValue := vl.(type) {
-				case float64:
-					metrics[metricsKey] = metricValue
-				case float32:
-					metrics[metricsKey] = float64(metricValue)
-				case int64:
-					metrics[metricsKey] = float64(metricValue)
-				case int32:
-					metrics[metricsKey] = float64(metricValue)
-				case int:
-					metrics[metricsKey] = float64(metricValue)
-				case string:
-					vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
-					metrics[metricsKey] = vlFloat64
-				default:
-					metrics[metricsKey] = 0
-				}
-			}
-
-			cache := job.Caching.GetCachePartition(partitionId)
-			cache.Lock()
-			if cacheData, ok := cache.Get(uniqueKey); ok {
-				for k, v := range metrics {
-					cacheData.Metrics[k] = cacheData.Metrics[k] + v
-				}
-				cache.Set(uniqueKey, cacheData)
-			} else {
-				cache.Set(uniqueKey, MetricsData{
-					Dimesions: dimesions,
-					Metrics:   metrics,
-				})
-			}
-			cache.Unlock()
 		}
 
 		sess.MarkMessage(msg, "")
@@ -189,10 +192,6 @@ func (a *AGGData) ResetCache() {
 }
 
 func (a *AGGData) Flush() {
-	if a.JobHandler == nil {
-		return
-	}
-
 	for _, partition := range a.Caching.Workers {
 		for _, item := range partition.Items() {
 			output := OutputData{}
