@@ -88,23 +88,23 @@ func (w *AGGHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama
 				}
 
 				for _, metricsKey := range job.Metrics {
-					vl, _ := inputData[metricsKey]
-					switch metricValue := vl.(type) {
-					case float64:
-						metrics[metricsKey] = metricValue
-					case float32:
-						metrics[metricsKey] = float64(metricValue)
-					case int64:
-						metrics[metricsKey] = float64(metricValue)
-					case int32:
-						metrics[metricsKey] = float64(metricValue)
-					case int:
-						metrics[metricsKey] = float64(metricValue)
-					case string:
-						vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
-						metrics[metricsKey] = vlFloat64
-					default:
-						metrics[metricsKey] = 0
+					metrics[metricsKey] = 0
+					if vl, ok := inputData[metricsKey]; ok {
+						switch metricValue := vl.(type) {
+						case float64:
+							metrics[metricsKey] = metricValue
+						case float32:
+							metrics[metricsKey] = float64(metricValue)
+						case int64:
+							metrics[metricsKey] = float64(metricValue)
+						case int32:
+							metrics[metricsKey] = float64(metricValue)
+						case int:
+							metrics[metricsKey] = float64(metricValue)
+						case string:
+							vlFloat64, _ := strconv.ParseFloat(metricValue, 64)
+							metrics[metricsKey] = vlFloat64
+						}
 					}
 				}
 
